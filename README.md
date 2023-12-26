@@ -37,5 +37,5 @@ Before running the game, ensure you have the following:
 - Enjoy the festive graphics and music that capture the holiday spirit.
 - Feel free to customize the game by exploring the Verilog code and making modifications.
 
-  # Acknowledgments
-  Thank you for trying out the Digital Game System! This project wouldn't be possible without the DE1-SoC FPGA board and Intel's Quartus Prime. Feel free to contribute, provide feedback, or share your holiday gaming experience.
+# Acknowledgments
+Thank you for trying out the Digital Game System! This project wouldn't be possible without the DE1-SoC FPGA board and Intel's Quartus Prime. Feel free to contribute, provide feedback, or share your holiday gaming experience.
