@@ -1,0 +1,100 @@
+
+module part2demo(rightUp, rightDown, leftUp, leftDown, iColour,iXY_Coord,iClock,oX,oY,oColour,oPlot,oDone, stateLeft, stateRight, stateBall, scoreLeft, scoreRight, gameOnSwitch);
+   parameter X_SCREEN_PIXELS = 10'd320;
+   parameter Y_SCREEN_PIXELS = 9'd240;
+																																																																																													
+   input wire rightUp, rightDown, leftUp, leftDown, gameOnSwitch;
+   input wire iColour;
+   input wire [6:0] iXY_Coord;
+   input wire 	    iClock;
+   output reg [10:0] oX;         // VGA pixel coordinates
+   output reg [9:0] oY;
+
+   output reg [2:0] oColour;     // VGA pixel colour (0-7)
+   output reg 	     oPlot;       // Pixel draw enable
+   output reg       oDone;       // goes high when finished drawing frame
+	output wire [3:0] stateLeft;
+	output wire [3:0] stateRight;
+	output wire [3:0] stateBall;
+	output wire [3:0] scoreLeft;
+	output wire [3:0] scoreRight;
+   
+	always @(posedge iClock) begin
+		  if (gameOnSwitch == 1) begin
+			  if(x_count >= 320 && y_count >= 240) begin 
+					x_count <= 0;
+					y_count <= 0;
+
+				end
+				if (x_count == 0 && y_count == 0) begin
+					oDone <= 0;
+				end
+			  begin
+						if ((x_count < paddleLEFTTopLeftX + paddle_width) && (x_count > paddleLEFTTopLeftX) && (y_count < paddleLEFTTopLeftY + paddle_height) && (y_count > paddleLEFTTopLeftY)) begin
+							oColour <= 3'b010;
+							oPlot <= 1;
+
+						 end
+						else if ((x_count < paddleRIGHTTopLeftX + paddle_width) && (x_count > paddleRIGHTTopLeftX) && (y_count < paddleRIGHTTopLeftY + paddle_height) && (y_count > paddleRIGHTTopLeftY)) begin
+							oColour <= 3'b010;
+							oPlot <= 1;
+
+						 end
+						 else if ((x_count < paddleLEFTTopLeftX + paddle_width) && (x_count > paddleLEFTTopLeftX) && y_count > 5 && y_count < 234) begin
+							oColour <= 3'h000;
+							oPlot <= 1;
+						end
+						else if ((x_count < paddleRIGHTTopLeftX + paddle_width) && (x_count > paddleRIGHTTopLeftX)  && y_count > 5 && y_count < 234) begin
+							oColour <= 3'h000;
+							oPlot <= 1;
+						end
+						else if ((x_count < ballTopLeftX + ball_size_x) && (x_count > ballTopLeftX) && (y_count < ballTopLeftY + ball_size_y) && (y_count > ballTopLeftY)) begin
+							oColour <= 3'b100;
+							oPlot <= 1;
+						end
+						else if (x_count >= 7 && x_count <= 313 && y_count > 5 && y_count <= 234) begin
+							oColour <= 3'h000;
+							oPlot <= 1;
+						end
+						else if (x_count >= 0 && x_count <= 2) begin
+							oColour <= 3'h000;
+							oPlot <= 1;
+						end
+						else if (x_count >= 318 && x_count <= 320) begin
+							oColour <= 3'h000;
+							oPlot <= 1;
+						end
+						else if (y_count >= 0 && y_count < 7) begin
+							oColour <= 3'hFFF;
+							oPlot <= 1;
+						end
+						else if (y_count > 234) begin
+							oColour <= 3'hFFF;
+							oPlot <= 1;
+						end
+						
+						else begin
+							oPlot <= 0;
+						end
+							
+						 
+						 oX <= x_count;
+						 oY <= y_count;
+						 
+						 if (x_count < 320)
+							  begin
+									x_count <= x_count + 1;
+							  end
+						 else if (y_count < 240)
+							  begin
+									x_count <= 0;
+									y_count <= y_count + 1;
+									if (y_count == height)
+										 oDone <= 1'b1;
+							  end
+							  
+						 
+			  end
+		 end 
+    end
+endmodule // part2

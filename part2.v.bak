@@ -1,0 +1,765 @@
+// Part 2 skeleton
+
+module part2
+	(
+		CLOCK_50,						//	On Board 50 MHz
+		// Your inputs and outputs here
+		KEY,							// On Board Keys
+		// The ports below are for the VGA output.  Do not change.
+		VGA_CLK,   						//	VGA Clock
+		VGA_HS,							//	VGA H_SYNC
+		VGA_VS,							//	VGA V_SYNC
+		VGA_BLANK_N,						//	VGA BLANK
+		VGA_SYNC_N,						//	VGA SYNC
+		VGA_R,   						//	VGA Red[9:0]
+		VGA_G,	 						//	VGA Green[9:0]
+		VGA_B,   						//	VGA Blue[9:0]
+		SW,
+		HEX0,
+		HEX1,
+		HEX2,
+		HEX4,
+		HEX5
+	);
+
+	input			CLOCK_50;				//	50 MHz
+	input	[3:0]	KEY;	
+	input [9:0] SW;
+	// Declare your inputs and outputs here
+	// Do not change the following outputs
+	output			VGA_CLK;   				//	VGA Clock
+	output			VGA_HS;					//	VGA H_SYNC
+	output			VGA_VS;					//	VGA V_SYNC
+	output			VGA_BLANK_N;				//	VGA BLANK
+	output			VGA_SYNC_N;				//	VGA SYNC
+	output	[7:0]	VGA_R;   				//	VGA Red[7:0] Changed from 10 to 8-bit DAC
+	output	[7:0]	VGA_G;	 				//	VGA Green[7:0]
+	output	[7:0]	VGA_B;   				//	VGA Blue[7:0]
+	output [6:0] HEX0;
+	output [6:0] HEX1;
+	output [6:0] HEX2;
+	output [6:0] HEX4;
+	output [6:0] HEX5;
+	
+	wire resetn;
+	assign resetn = SW[9];
+	
+	// Create the colour, x, y and writeEn wires that are inputs to the controller.
+
+	wire [2:0] colour;
+	wire [10:0] x;
+	wire [9:0] y;
+	wire writeEn;
+	wire [3:0] c1;
+	wire [3:0] c2;
+	wire [3:0] c3;
+	wire [3:0] c4;
+	wire [3:0] c5;
+	// Create an Instance of a VGA controller - there can be only one!
+	// Define the number of colours as well as the initial background
+	// image file (.MIF) for the controller.
+	vga_adapter VGA(
+			.resetn(resetn),
+			.clock(CLOCK_50),
+			.colour(colour),
+			.x(x),
+			.y(y),
+			.plot(writeEn),
+			/* Signals for the DAC to drive the monitor. */
+			.VGA_R(VGA_R),
+			.VGA_G(VGA_G),
+			.VGA_B(VGA_B),
+			.VGA_HS(VGA_HS),
+			.VGA_VS(VGA_VS),
+			.VGA_BLANK(VGA_BLANK_N),
+			.VGA_SYNC(VGA_SYNC_N),
+			.VGA_CLK(VGA_CLK));
+		defparam VGA.RESOLUTION = "320x240";
+		defparam VGA.MONOCHROME = "FALSE";
+		defparam VGA.BITS_PER_COLOUR_CHANNEL = 1;
+		defparam VGA.BACKGROUND_IMAGE = "homeScreen.mif";
+			
+	// Put your code here. Your code should produce signals x,y,colour and writeEn
+	// for the VGA controller, in addition to any other functionality your design may require.
+	
+	part2demo p2(.rightUp(~KEY[0]), .rightDown(~KEY[1]), .leftUp(~KEY[2]), .leftDown(~KEY[3]), .iColour(SW[9]), .iXY_Coord(SW[6:0]), .iClock(CLOCK_50), .oX(x[10:0]), .oY(y[9:0]), .oColour(colour[2:0]), .oPlot(writeEn), .oDone(), .stateLeft(c2[3:0]), .stateRight(c1[3:0]), .stateBall(c3[3:0]), .scoreLeft(c4[3:0]), .scoreRight(c5[3:0]), .gameOnSwitch(SW[4]));
+	
+	hex_decoder leftPaddleState(.c(c2[3:0]), .display(HEX1[6:0]));
+	hex_decoder rightPaddleState(.c(c1[3:0]), .display(HEX0[6:0]));
+	hex_decoder ballState(.c(c3[3:0]), .display(HEX2[6:0]));
+	hex_decoder leftScore(.c(c4[3:0]), .display(HEX4[6:0]));
+	hex_decoder rightScore(.c(c5[3:0]), .display(HEX5[6:0]));
+endmodule
+
+module part2demo(rightUp, rightDown, leftUp, leftDown, iColour,iXY_Coord,iClock,oX,oY,oColour,oPlot,oDone, stateLeft, stateRight, stateBall, scoreLeft, scoreRight, gameOnSwitch);
+   parameter X_SCREEN_PIXELS = 10'd320;
+   parameter Y_SCREEN_PIXELS = 9'd240;
+
+   input wire rightUp, rightDown, leftUp, leftDown, gameOnSwitch;
+   input wire iColour;
+   input wire [6:0] iXY_Coord;
+   input wire 	    iClock;
+   output reg [10:0] oX;         // VGA pixel coordinates
+   output reg [9:0] oY;
+
+   output reg [2:0] oColour;     // VGA pixel colour (0-7)
+   output reg 	     oPlot;       // Pixel draw enable
+   output reg       oDone;       // goes high when finished drawing frame
+	output wire [3:0] stateLeft;
+	output wire [3:0] stateRight;
+	output wire [3:0] stateBall;
+	output wire [3:0] scoreLeft;
+	output wire [3:0] scoreRight;
+   //
+   //
+   // Your code goes here
+   //
+   //  
+	// left paddle fsm variables
+   localparam InitialLeft = 4'b0000, leftPaddleUp = 4'b0001, leftPaddleDown = 4'b0010;
+	reg [3:0] currentStateLeft = InitialLeft;
+	reg [3:0] nextStateLeft;
+	
+	// right paddle fsm variables
+	localparam InitialRight = 4'b0000, rightPaddleUp = 4'b0001, rightPaddleDown = 4'b0010;
+	reg [3:0] currentStateRight = InitialRight;
+	reg [3:0] nextStateRight;
+	
+	// ball fsm variables
+	localparam InitialBall = 4'b0000, hitLeftPaddle = 4'b0001, hitRightPaddle = 4'b0010, hitBottomOfScreen = 4'b0011, hitTopOfScreen = 4'b0100, outOfBoundsLeft = 4'b0101, outOfBoundsRight = 4'b0110, gameStart = 4'b0111;
+	reg [3:0] currentStateBall = InitialBall;
+	reg [3:0] nextStateBall;
+	
+   // signals
+   reg [10:0] width;
+   reg [9:0] height;
+   reg plot;
+   reg load_x_colour;
+   reg load_y_colour;
+	
+	reg paddleLeftUp, paddleLeftDown, paddleRightUp, paddleRightDown;
+	
+	// left paddle position (top left corner)
+   reg [10:0] paddleLEFTTopLeftX = 2;
+   reg [9:0] paddleLEFTTopLeftY = 90;
+	
+	// right paddle position (top left corner)
+	reg [10:0] paddleRIGHTTopLeftX = 313;
+   reg [9:0] paddleRIGHTTopLeftY = 90;
+	
+	// ball position (top left corner)
+	reg [10:0] ballTopLeftX = 158;
+	reg [9:0] ballTopLeftY = 118;
+	
+	
+	reg [6:0] xPixel;
+   reg [6:0] yPixel;
+	
+	reg [9:0] paddle_height = 50;
+	reg [10:0] paddle_width = 5;
+	
+	reg [9:0] up_velocity = -1;
+	reg [9:0] down_velocity = 1;
+	
+	reg [9:0] ball_size_x = 6;
+	reg [9:0] ball_size_y = 8;
+	
+	
+	reg [9:0] ball_velocity_x_pos = 2;
+	reg [9:0] ball_velocity_x_neg = -2;
+	reg [9:0] ball_velocity_y_pos = 2;
+	reg [9:0] ball_velocity_y_neg = -2;
+	
+	
+   reg [2:0] colourReg;
+
+   reg [10:0] x_count = 0;
+   reg [9:0] y_count = 0;
+
+	reg [3:0] leftPaddleScore = 0;
+	reg [3:0] rightPaddleScore = 0;
+	
+	reg defaultScreen, gamePlaying, leftPaddleWasHit, rightPaddleWasHit, bottomOfScreenWasHit, topOfScreenWasHit, pointForRight, pointForLeft;
+	
+   // FSM for Left Paddle
+   always@ (posedge iClock)
+   begin: state_table_left
+        case(currentStateLeft)
+            InitialLeft: begin 
+                if (leftUp == 1)
+                    nextStateLeft = leftPaddleUp;
+                else if (leftDown == 1)
+                    nextStateLeft = leftPaddleDown;
+				    else
+                    nextStateLeft = InitialLeft;
+                end
+            leftPaddleUp: begin
+                if (leftUp == 0)
+                    nextStateLeft = InitialLeft;
+                else
+                    nextStateLeft = leftPaddleUp;
+                end
+            leftPaddleDown: begin
+                if (leftDown == 0)
+                    nextStateLeft = InitialLeft;
+                else
+                    nextStateLeft = leftPaddleDown;
+                end
+
+            default: currentStateLeft = InitialLeft;
+        endcase
+   end
+	
+	assign stateLeft = currentStateLeft;
+	
+   // enable signals left
+   always @(posedge iClock)
+    begin: enable_signals_left
+        case(currentStateLeft)
+			  InitialLeft: begin
+					paddleLeftUp = 0;
+					paddleLeftDown = 0;
+				end
+            leftPaddleUp: begin 
+                paddleLeftUp = 1;
+					 paddleLeftDown = 0;
+            end
+
+            leftPaddleDown: begin 
+                paddleLeftDown = 1;
+					 paddleLeftUp = 0;
+            end
+        endcase
+    end
+
+   always @(posedge iClock)
+    begin: state_FFs_left
+		currentStateLeft <= nextStateLeft;
+    end // state_FFS
+	 
+    //input datapath_left
+    
+	 
+	reg [25:0] up_velocity_counter_left = 0;
+	reg [25:0] down_velocity_counter_left = 0;
+	parameter UP_SPEEDNEW = 500000;    // Adjust this value to control the upward speed
+	parameter DOWN_SPEEDNEW = 500000;  // Adjust this value to control the downward speed	
+	
+	always @(posedge iClock) begin
+			if (paddleLeftUp == 1 && paddleLEFTTopLeftY > 6) begin
+				if (up_velocity_counter_left == UP_SPEEDNEW ) begin
+					paddleLEFTTopLeftY = paddleLEFTTopLeftY + up_velocity;
+					up_velocity_counter_left <= 0;
+				end
+				else begin
+					up_velocity_counter_left <= up_velocity_counter_left + 1;
+				end
+				
+			end
+			
+			if (paddleLeftDown == 1 && paddleLEFTTopLeftY + paddle_height + down_velocity < 234) begin
+				if (down_velocity_counter_left == DOWN_SPEEDNEW ) begin
+					paddleLEFTTopLeftY = paddleLEFTTopLeftY + down_velocity;
+					down_velocity_counter_left <= 0;
+				end
+				else begin
+					down_velocity_counter_left <= down_velocity_counter_left + 1;
+				end
+			end
+    end
+	 
+	 
+   // FSM for Right Paddle
+   always@ (posedge iClock)
+   begin: state_table_right
+        case(currentStateRight)
+            InitialRight: begin 
+                if (rightUp == 1)
+						  nextStateRight = rightPaddleUp;
+				    else if (rightDown == 1)
+						  nextStateRight = rightPaddleDown;
+				    else
+                    nextStateRight = InitialRight;
+                end
+            rightPaddleUp: begin
+                if (rightUp == 0)
+                    nextStateRight = InitialRight;
+                else
+                    nextStateRight = rightPaddleUp;
+                end
+            rightPaddleDown: begin
+                if (rightDown == 0)
+                    nextStateRight = InitialRight;
+                else
+                    nextStateRight = rightPaddleDown;
+                end
+            default: currentStateRight = InitialRight;
+        endcase
+   end
+	
+	assign stateRight = currentStateRight;
+	
+	// enable signals
+   always @(posedge iClock)
+    begin: enable_signals_right
+        case(currentStateRight)
+				InitialRight: begin
+					paddleRightUp = 0;
+					paddleRightDown = 0;
+				end
+            rightPaddleUp: begin 
+                paddleRightUp = 1;
+					 paddleRightDown = 0;
+            end
+
+            rightPaddleDown: begin 
+                paddleRightDown = 1;
+					 paddleRightUp = 0;
+            end
+        endcase
+    end
+
+	always @(posedge iClock)
+    begin: state_FFs_right
+		currentStateRight <= nextStateRight;
+    end // state_FFS
+	
+	// input datapath right
+	
+	reg [25:0] up_velocity_counter_right = 0;
+	reg [25:0] down_velocity_counter_right = 0;
+	
+	always @(posedge iClock) begin
+			if (paddleRightUp == 1 && paddleRIGHTTopLeftY > 6) begin
+				if (up_velocity_counter_right == UP_SPEEDNEW) begin
+					paddleRIGHTTopLeftY = paddleRIGHTTopLeftY + up_velocity;
+					up_velocity_counter_right <= 0;
+				end
+				else begin
+					up_velocity_counter_right <= up_velocity_counter_right + 1;
+				end
+				
+			end
+			
+			if (paddleRightDown == 1 && paddleRIGHTTopLeftY + paddle_height + down_velocity < 234) begin
+				if (down_velocity_counter_right == DOWN_SPEEDNEW ) begin
+					paddleRIGHTTopLeftY = paddleRIGHTTopLeftY + down_velocity;
+					down_velocity_counter_right <= 0;
+				end
+				else begin
+					down_velocity_counter_right <= down_velocity_counter_right + 1;
+				end
+			end
+    end
+	
+	 // localparam InitialBall = 4'b0000, hitLeftPaddle = 4'b0001, hitRightPaddle = 4'b0010, hitBottomOfScreen = 4'b0011, hitTopOfScreen = 4'b0100, outOfBoundsLeft = 4'b0101, outOfBoundsRight = 4'b0110;
+	 // fsm for ball
+	 always@ (posedge iClock)
+	 begin: state_table_ball
+		  case(currentStateBall)
+				InitialBall: begin
+					nextStateBall = gameStart;
+				end
+				
+				gameStart: begin 
+					 if (ballTopLeftX < paddleLEFTTopLeftX + paddle_width) begin
+						if ((ballTopLeftY + ball_size_y >= paddleLEFTTopLeftY) && (ballTopLeftY <= paddleLEFTTopLeftY + paddle_height)) begin
+								nextStateBall = hitLeftPaddle;
+						end
+					 end
+					 else if (ballTopLeftX + ball_size_x > paddleRIGHTTopLeftX) begin
+						if ((ballTopLeftY + ball_size_y >= paddleRIGHTTopLeftY) && (ballTopLeftY <= paddleRIGHTTopLeftY + paddle_height)) begin
+							nextStateBall = hitRightPaddle;
+						end
+						else if (ballTopLeftX >= 318) begin
+							nextStateBall = outOfBoundsRight;
+						end
+					 end
+					 else if (ballTopLeftY + ball_size_y > 234 /*bottom of screen*/) begin
+						nextStateBall = hitBottomOfScreen;
+					 end
+					 else if (ballTopLeftY <= 6 /*top of screen*/) begin
+						nextStateBall = hitTopOfScreen;
+					 end
+					 else if (ballTopLeftX <= 2) begin
+						nextStateBall = outOfBoundsLeft;
+					 end
+					 
+					 else begin
+						nextStateBall = gameStart;
+						end
+				end
+				hitLeftPaddle: begin
+					nextStateBall = gameStart;
+				end
+				hitRightPaddle: begin
+					nextStateBall = gameStart;
+				end
+				hitBottomOfScreen: begin
+					nextStateBall = gameStart;
+				end
+				hitTopOfScreen: begin
+					nextStateBall = gameStart;
+				end
+				outOfBoundsLeft: begin
+					nextStateBall = InitialBall;
+				end
+				outOfBoundsRight: begin
+					nextStateBall = InitialBall;
+				end
+				
+				default: currentStateBall = InitialBall;
+		  endcase
+	 end
+	 assign stateBall = currentStateBall;
+	 // enable signals
+	 // reg defaultScreen, gamePlaying, leftPaddleWasHit, rightPaddleWasHit, bottomOfScreenWasHit, topOfScreenWasHit, pointForRight, pointForLeft;
+	
+    always @(posedge iClock)
+     begin: enable_signals_ball
+        case(currentStateBall)
+				InitialBall: begin
+						leftPaddleWasHit = 0;
+						rightPaddleWasHit = 0;
+						bottomOfScreenWasHit = 0;
+						topOfScreenWasHit = 0;
+						pointForRight = 0;
+						pointForLeft = 0;
+						defaultScreen = 1;
+						gamePlaying = 0;
+				end
+				gameStart: begin
+					if (gameOnSwitch == 1) begin
+						rightPaddleWasHit = 0;
+						defaultScreen = 0;
+						gamePlaying = 1;
+					end
+					else begin
+						defaultScreen = 1;
+						gamePlaying = 0;
+					end
+					
+				end
+				hitLeftPaddle: begin
+					leftPaddleWasHit = 1;
+					rightPaddleWasHit = 0;
+					bottomOfScreenWasHit = 0;
+					topOfScreenWasHit = 0;
+					pointForRight = 0;
+					pointForLeft = 0;
+				end
+				hitRightPaddle: begin
+					leftPaddleWasHit = 0;
+					rightPaddleWasHit = 1;
+					bottomOfScreenWasHit = 0;
+					topOfScreenWasHit = 0;
+					pointForRight = 0;
+					pointForLeft = 0;
+				end
+				hitBottomOfScreen: begin
+					leftPaddleWasHit = 0;
+					rightPaddleWasHit = 0;
+					bottomOfScreenWasHit = 1;
+					topOfScreenWasHit = 0;
+					pointForRight = 0;
+					pointForLeft = 0;
+				end
+				hitTopOfScreen: begin
+					leftPaddleWasHit = 0;
+					rightPaddleWasHit = 0;
+					bottomOfScreenWasHit = 0;
+					topOfScreenWasHit = 1;
+					pointForRight = 0;
+					pointForLeft = 0;
+				end
+				outOfBoundsLeft: begin
+					leftPaddleWasHit = 0;
+					rightPaddleWasHit = 0;
+					bottomOfScreenWasHit = 0;
+					topOfScreenWasHit = 0;
+					pointForRight = 1;
+					pointForLeft = 0;
+					defaultScreen = 1;
+					gamePlaying = 0;
+				end
+				outOfBoundsRight: begin
+					leftPaddleWasHit = 0;
+					rightPaddleWasHit = 0;
+					bottomOfScreenWasHit = 0;
+					topOfScreenWasHit = 0;
+					pointForRight = 0;
+					pointForLeft = 1;
+					defaultScreen = 1;
+					gamePlaying = 0;
+				end
+            
+        endcase
+     end
+	
+		always @(posedge iClock)
+		 begin: state_FFs_ball
+			currentStateBall <= nextStateBall;
+		 end // state_FFS
+		
+		// input datapath for ball
+	   // reg defaultScreen, gamePlaying, leftPaddleWasHit, rightPaddleWasHit, bottomOfScreenWasHit, topOfScreenWasHit, pointForRight, pointForLeft;
+		/*
+		reg [9:0] ball_velocity_x_pos = 1;
+		reg [9:0] ball_velocity_x_neg = -1;
+		reg [9:0] ball_velocity_y_pos = 1;
+		reg [9:0] ball_velocity_y_neg = -1;
+		*/
+		reg [31:0] x_velocity_counter_right = 0;
+		reg [31:0] x_velocity_counter_left = 0;
+		
+		reg [31:0] y_velocity_counter_up = 0;
+		reg [31:0] y_velocity_counter_down = 0;
+		
+		reg [9:0] ball_velocity_x = 2;
+		reg [9:0] ball_velocity_y = -2;
+		
+		always @(posedge iClock) begin
+				if (defaultScreen == 1) begin // reset everything to default positions
+					ballTopLeftX = 158;
+					ballTopLeftY = 118;
+					
+				end
+				
+				if (leftPaddleWasHit == 1) begin
+					ball_velocity_x = ball_velocity_x_pos;
+					
+					if (gamePlaying == 1) begin
+						if (x_velocity_counter_right == 1000000) begin
+							ballTopLeftX = ballTopLeftX + ball_velocity_x;
+							x_velocity_counter_right <= 0;
+						end
+						else begin
+							x_velocity_counter_right <= x_velocity_counter_right + 1;
+						end
+						if (y_velocity_counter_up == 1000000) begin
+							ballTopLeftY = ballTopLeftY + ball_velocity_y;
+							y_velocity_counter_up <= 0;
+						end
+						else begin
+							y_velocity_counter_up <= y_velocity_counter_up + 1;
+						end
+					end
+					
+				end
+				
+				else if (rightPaddleWasHit == 1) begin
+					ball_velocity_x = ball_velocity_x_neg;
+					
+					if (gamePlaying == 1) begin
+						if (x_velocity_counter_right == 1000000) begin
+							ballTopLeftX = ballTopLeftX + ball_velocity_x;
+							x_velocity_counter_right <= 0;
+						end
+						else begin
+							x_velocity_counter_right <= x_velocity_counter_right + 1;
+						end
+						if (y_velocity_counter_up == 1000000) begin
+							ballTopLeftY = ballTopLeftY + ball_velocity_y;
+							y_velocity_counter_up <= 0;
+						end
+						else begin
+							y_velocity_counter_up <= y_velocity_counter_up + 1;
+						end
+					end
+					
+				end
+				
+				else if (bottomOfScreenWasHit == 1) begin
+					ball_velocity_y = ball_velocity_y_neg;
+					
+					if (gamePlaying == 1) begin
+						if (x_velocity_counter_right == 1000000) begin
+							ballTopLeftX = ballTopLeftX + ball_velocity_x;
+							x_velocity_counter_right <= 0;
+						end
+						else begin
+							x_velocity_counter_right <= x_velocity_counter_right + 1;
+						end
+						if (y_velocity_counter_up == 1000000) begin
+							ballTopLeftY = ballTopLeftY + ball_velocity_y;
+							y_velocity_counter_up <= 0;
+						end
+						else begin
+							y_velocity_counter_up <= y_velocity_counter_up + 1;
+						end
+					end
+					
+				end
+				
+				else if (topOfScreenWasHit == 1) begin
+					ball_velocity_y = ball_velocity_y_pos;
+					
+					if (gamePlaying == 1) begin
+						if (x_velocity_counter_right == 1000000) begin
+							ballTopLeftX = ballTopLeftX + ball_velocity_x;
+							x_velocity_counter_right <= 0;
+						end
+						else begin
+							x_velocity_counter_right <= x_velocity_counter_right + 1;
+						end
+						if (y_velocity_counter_up == 1000000) begin
+							ballTopLeftY = ballTopLeftY + ball_velocity_y;
+							y_velocity_counter_up <= 0;
+						end
+						else begin
+							y_velocity_counter_up <= y_velocity_counter_up + 1;
+						end
+					end
+				
+					
+				end
+				
+				
+				
+				else begin
+				
+				if (gamePlaying == 1) begin
+						if (x_velocity_counter_right == 1000000) begin
+							ballTopLeftX = ballTopLeftX + ball_velocity_x;
+							x_velocity_counter_right <= 0;
+						end
+						else begin
+							x_velocity_counter_right <= x_velocity_counter_right + 1;
+						end
+						if (y_velocity_counter_up == 1000000) begin
+							ballTopLeftY = ballTopLeftY + ball_velocity_y;
+							y_velocity_counter_up <= 0;
+						end
+						else begin
+							y_velocity_counter_up <= y_velocity_counter_up + 1;
+						end
+					end
+				
+				end
+				/*if (pointForRight == 1) begin
+					rightPaddleScore <= rightPaddleScore + 1;
+					if (rightPaddleScore >= 10) begin
+						rightPaddleScore <= 0;
+					end
+				end
+				
+				if (pointForLeft == 1) begin
+					leftPaddleScore <= leftPaddleScore + 1;
+					if (leftPaddleScore >= 10) begin
+						leftPaddleScore <= 0;
+					end
+				end*/
+		 end
+		assign scoreLeft = leftPaddleScore;
+		assign scoreRight = rightPaddleScore;
+    // vga adapter
+    always @(posedge iClock) begin
+        //if (iResetn == 1'b0) begin
+			//	x_count <= 0;
+			//	y_count <= 0;
+         //   oX <= 0;
+         //   oY <= 0;
+         //   oColour <= 0;
+         //   oPlot <= 0;
+         //   oDone <= 0;
+        //end
+
+        //else
+		  if (gameOnSwitch == 1) begin
+			  if(x_count >= 320 && y_count >= 240) begin 
+					x_count <= 0;
+					y_count <= 0;
+
+				end
+				if (x_count == 0 && y_count == 0) begin
+					oDone <= 0;
+				end
+			  begin
+						if ((x_count < paddleLEFTTopLeftX + paddle_width) && (x_count > paddleLEFTTopLeftX) && (y_count < paddleLEFTTopLeftY + paddle_height) && (y_count > paddleLEFTTopLeftY)) begin
+							oColour <= 3'b010;
+							oPlot <= 1;
+
+						 end
+						else if ((x_count < paddleRIGHTTopLeftX + paddle_width) && (x_count > paddleRIGHTTopLeftX) && (y_count < paddleRIGHTTopLeftY + paddle_height) && (y_count > paddleRIGHTTopLeftY)) begin
+							oColour <= 3'b010;
+							oPlot <= 1;
+
+						 end
+						 else if ((x_count < paddleLEFTTopLeftX + paddle_width) && (x_count > paddleLEFTTopLeftX) && y_count > 5 && y_count < 234) begin
+							oColour <= 3'h000;
+							oPlot <= 1;
+						end
+						else if ((x_count < paddleRIGHTTopLeftX + paddle_width) && (x_count > paddleRIGHTTopLeftX)  && y_count > 5 && y_count < 234) begin
+							oColour <= 3'h000;
+							oPlot <= 1;
+						end
+						else if ((x_count < ballTopLeftX + ball_size_x) && (x_count > ballTopLeftX) && (y_count < ballTopLeftY + ball_size_y) && (y_count > ballTopLeftY)) begin
+							oColour <= 3'b100;
+							oPlot <= 1;
+						end
+						else if (x_count >= 7 && x_count <= 313 && y_count > 5 && y_count <= 234) begin
+							oColour <= 3'h000;
+							oPlot <= 1;
+						end
+						else if (x_count >= 0 && x_count <= 2) begin
+							oColour <= 3'h000;
+							oPlot <= 1;
+						end
+						else if (x_count >= 318 && x_count <= 320) begin
+							oColour <= 3'h000;
+							oPlot <= 1;
+						end
+						else if (y_count >= 0 && y_count < 7) begin
+							oColour <= 3'hFFF;
+							oPlot <= 1;
+						end
+						else if (y_count > 234) begin
+							oColour <= 3'hFFF;
+							oPlot <= 1;
+						end
+						
+						else begin
+							oPlot <= 0;
+						end
+							
+						 
+						 oX <= x_count;
+						 oY <= y_count;
+						 
+						 if (x_count < 320)
+							  begin
+									x_count <= x_count + 1;
+							  end
+						 else if (y_count < 240)
+							  begin
+									x_count <= 0;
+									y_count <= y_count + 1;
+									if (y_count == height)
+										 oDone <= 1'b1;
+							  end
+							  
+						 
+			  end
+		 end 
+    end
+endmodule // part2
+
+
+module hex_decoder(c, display);
+    input [3:0]c;
+    output [6:0]display;
+
+    assign display[0] = ~((c[0] | c[1] | ~c[2] | c[3])&(~c[0] | ~c[1] | c[2] | ~c[3])&(~c[0] | c[1] | ~c[2] | ~c[3])&(~c[0] | c[1] | c[2] | c[3]));
+
+    assign display[1] = ~((~c[0] | c[1] | ~c[2] | c[3])&(c[0] | ~c[1] | ~c[2] | c[3])&(~c[0] | ~c[1] | c[2] | ~c[3])&(c[0] | c[1] | ~c[2] | ~c[3])&(c[0] | ~c[1] | ~c[2] | ~c[3])&(~c[0] | ~c[1] | ~c[2] | ~c[3]));
+
+    assign display[2] = ~((c[0] | ~c[1] | c[2] | c[3])&(c[0] | c[1] | ~c[2] | ~c[3])&(c[0] | ~c[1] | ~c[2] | ~c[3])&(~c[0] | ~c[1] | ~c[2] | ~c[3]));
+
+    assign display[3] = ~((~c[0] | c[1] | c[2] | c[3])&(c[0] | c[1] | ~c[2] | c[3])&(~c[0] | ~c[1] | ~c[2] | c[3])&(c[0] | ~c[1] | c[2] | ~c[3])&(~c[0] | ~c[1] | ~c[2] | ~c[3]));
+
+    assign display[4] = ~((~c[0] | c[1] | c[2] | c[3])&(~c[0] | ~c[1] | c[2] | c[3])&(c[0] | c[1] | ~c[2] | c[3])&(~c[0] | c[1] | ~c[2] | c[3])&(~c[0] | ~c[1] | ~c[2] | c[3])&(~c[0] | c[1] | c[2] | ~c[3]));
+
+    assign display[5] = ~((~c[0] | c[1] | c[2] | c[3])&(c[0] | ~c[1] | c[2] | c[3])&(~c[0] | ~c[1] | c[2] | c[3])&(~c[0] | ~c[1] | ~c[2] | c[3])&(~c[0] | c[1] | ~c[2] | ~c[3]));
+
+    assign display[6] = ~((c[0] | c[1] | c[2] | c[3])&(~c[0] | c[1] | c[2] | c[3])&(~c[0] | ~c[1] | ~c[2] | c[3])&(c[0] | c[1] | ~c[2] | ~c[3]));
+endmodule
